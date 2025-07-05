@@ -10,12 +10,13 @@ interface MatchSimulationProps {
   onBack: () => void;
 }
 
-interface Logo {
+interface Ball {
   x: number;
   y: number;
   vx: number;
   vy: number;
   team: 'home' | 'away';
+  color: string;
 }
 
 export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationProps) {
@@ -27,9 +28,23 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
   const [gameStarted, setGameStarted] = useState(false);
   const [gameEnded, setGameEnded] = useState(false);
 
-  const logos = useRef<Logo[]>([
-    { x: 200, y: 200, vx: 2, vy: 1.5, team: 'home' },
-    { x: 400, y: 300, vx: -1.8, vy: -2.2, team: 'away' }
+  const balls = useRef<Ball[]>([
+    { 
+      x: 200, 
+      y: 200, 
+      vx: 3, 
+      vy: 2, 
+      team: 'home',
+      color: match.homeTeam.primaryColor
+    },
+    { 
+      x: 400, 
+      y: 300, 
+      vx: -2.5, 
+      vy: -3, 
+      team: 'away',
+      color: match.awayTeam.primaryColor
+    }
   ]);
 
   useEffect(() => {
@@ -51,9 +66,10 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
 
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const radius = 180;
-    const goalWidth = 60;
-    const goalHeight = 20;
+    const arenaRadius = 180;
+    const ballRadius = 12;
+    const goalWidth = 100; // Increased from 60
+    const goalHeight = 35; // Increased from 20
 
     function animate() {
       if (!ctx || !canvas) return;
@@ -64,64 +80,122 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       ctx.strokeStyle = '#37003C';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, arenaRadius, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Draw goal
+      // Draw goal - bigger size
       ctx.fillStyle = '#00FF41';
-      ctx.fillRect(centerX + radius - 10, centerY - goalHeight/2, 20, goalHeight);
+      ctx.fillRect(centerX + arenaRadius - 15, centerY - goalHeight/2, 25, goalHeight);
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(centerX + radius - 10, centerY - goalHeight/2, 20, goalHeight);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(centerX + arenaRadius - 15, centerY - goalHeight/2, 25, goalHeight);
 
-      // Update and draw logos
-      logos.current.forEach((logo, index) => {
+      // Update and draw balls
+      balls.current.forEach((ball, index) => {
         // Update position
-        logo.x += logo.vx;
-        logo.y += logo.vy;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
 
-        // Check collision with circle boundary
-        const dx = logo.x - centerX;
-        const dy = logo.y - centerY;
+        // Check collision with arena boundary
+        const dx = ball.x - centerX;
+        const dy = ball.y - centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance >= radius - 15) {
+        if (distance >= arenaRadius - ballRadius) {
           // Check if entering goal area
-          if (logo.x >= centerX + radius - 25 && 
-              logo.y >= centerY - goalHeight/2 - 15 && 
-              logo.y <= centerY + goalHeight/2 + 15) {
+          if (ball.x >= centerX + arenaRadius - 35 && 
+              ball.y >= centerY - goalHeight/2 - ballRadius && 
+              ball.y <= centerY + goalHeight/2 + ballRadius) {
             // Goal scored!
-            if (logo.team === 'home') {
+            if (ball.team === 'home') {
               setHomeGoals(prev => prev + 1);
             } else {
               setAwayGoals(prev => prev + 1);
             }
             
-            // Reset logo position
-            logo.x = centerX + (Math.random() - 0.5) * 100;
-            logo.y = centerY + (Math.random() - 0.5) * 100;
-            logo.vx = (Math.random() - 0.5) * 4;
-            logo.vy = (Math.random() - 0.5) * 4;
+            // Reset ball position to center area
+            ball.x = centerX + (Math.random() - 0.5) * 80;
+            ball.y = centerY + (Math.random() - 0.5) * 80;
+            ball.vx = (Math.random() - 0.5) * 6;
+            ball.vy = (Math.random() - 0.5) * 6;
           } else {
-            // Bounce off wall
+            // Enhanced bouncing physics - more sensitive
             const angle = Math.atan2(dy, dx);
-            logo.vx = -logo.vx * 0.8 + Math.cos(angle) * 0.5;
-            logo.vy = -logo.vy * 0.8 + Math.sin(angle) * 0.5;
+            const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
             
-            // Push back inside circle
-            logo.x = centerX + Math.cos(angle) * (radius - 20);
-            logo.y = centerY + Math.sin(angle) * (radius - 20);
+            // Reflect velocity based on collision angle
+            const normalX = Math.cos(angle);
+            const normalY = Math.sin(angle);
+            
+            // Dot product of velocity and normal
+            const dotProduct = ball.vx * normalX + ball.vy * normalY;
+            
+            // Reflect velocity
+            ball.vx = ball.vx - 2 * dotProduct * normalX;
+            ball.vy = ball.vy - 2 * dotProduct * normalY;
+            
+            // Add some randomness and maintain energy
+            ball.vx *= 0.95 + Math.random() * 0.1;
+            ball.vy *= 0.95 + Math.random() * 0.1;
+            
+            // Ensure minimum speed
+            const newSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+            if (newSpeed < 2) {
+              ball.vx = (ball.vx / newSpeed) * 2.5;
+              ball.vy = (ball.vy / newSpeed) * 2.5;
+            }
+            
+            // Push ball back inside arena
+            ball.x = centerX + Math.cos(angle) * (arenaRadius - ballRadius - 2);
+            ball.y = centerY + Math.sin(angle) * (arenaRadius - ballRadius - 2);
           }
         }
 
-        // Draw logo
-        ctx.font = '24px Arial';
+        // Ball-to-ball collision detection
+        balls.current.forEach((otherBall, otherIndex) => {
+          if (index !== otherIndex) {
+            const dx = ball.x - otherBall.x;
+            const dy = ball.y - otherBall.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < ballRadius * 2) {
+              // Collision detected - exchange velocities with some randomness
+              const tempVx = ball.vx;
+              const tempVy = ball.vy;
+              
+              ball.vx = otherBall.vx * 0.8 + (Math.random() - 0.5) * 2;
+              ball.vy = otherBall.vy * 0.8 + (Math.random() - 0.5) * 2;
+              otherBall.vx = tempVx * 0.8 + (Math.random() - 0.5) * 2;
+              otherBall.vy = tempVy * 0.8 + (Math.random() - 0.5) * 2;
+              
+              // Separate balls to prevent sticking
+              const angle = Math.atan2(dy, dx);
+              const targetX = otherBall.x + Math.cos(angle) * ballRadius * 2;
+              const targetY = otherBall.y + Math.sin(angle) * ballRadius * 2;
+              ball.x += (targetX - ball.x) * 0.5;
+              ball.y += (targetY - ball.y) * 0.5;
+            }
+          }
+        });
+
+        // Draw ball as colored circle
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
+        ctx.fillStyle = ball.color;
+        ctx.fill();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Add team initial in center of ball
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 10px Arial';
         ctx.textAlign = 'center';
-        ctx.fillStyle = logo.team === 'home' ? match.homeTeam.primaryColor : match.awayTeam.primaryColor;
+        ctx.textBaseline = 'middle';
         ctx.fillText(
-          logo.team === 'home' ? match.homeTeam.logo : match.awayTeam.logo,
-          logo.x,
-          logo.y
+          ball.team === 'home' ? match.homeTeam.shortName[0] : match.awayTeam.shortName[0],
+          ball.x,
+          ball.y
         );
       });
 
