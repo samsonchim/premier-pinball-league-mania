@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Match } from '../context/GameContext';
 import { Button } from '@/components/ui/button';
@@ -22,6 +21,7 @@ interface Ball {
 export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
+  const rotationRef = useRef<number>(0);
   const [timeLeft, setTimeLeft] = useState(90);
   const [homeGoals, setHomeGoals] = useState(0);
   const [awayGoals, setAwayGoals] = useState(0);
@@ -68,13 +68,22 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
     const ballRadius = 12;
-    const goalWidth = 100; // Increased from 60
-    const goalHeight = 35; // Increased from 20
+    const goalWidth = 120; // Increased from 100
+    const goalHeight = 50; // Increased from 35
 
     function animate() {
       if (!ctx || !canvas) return;
 
+      // Update rotation
+      rotationRef.current += 0.005; // Gentle rotation speed
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Save context for rotation
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(rotationRef.current);
+      ctx.translate(-centerX, -centerY);
 
       // Draw arena circle
       ctx.strokeStyle = '#37003C';
@@ -85,10 +94,13 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
 
       // Draw goal - bigger size
       ctx.fillStyle = '#00FF41';
-      ctx.fillRect(centerX + arenaRadius - 15, centerY - goalHeight/2, 25, goalHeight);
+      ctx.fillRect(centerX + arenaRadius - 20, centerY - goalHeight/2, 30, goalHeight);
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 3;
-      ctx.strokeRect(centerX + arenaRadius - 15, centerY - goalHeight/2, 25, goalHeight);
+      ctx.strokeRect(centerX + arenaRadius - 20, centerY - goalHeight/2, 30, goalHeight);
+
+      // Restore context
+      ctx.restore();
 
       // Update and draw balls
       balls.current.forEach((ball, index) => {
@@ -102,8 +114,8 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance >= arenaRadius - ballRadius) {
-          // Check if entering goal area
-          if (ball.x >= centerX + arenaRadius - 35 && 
+          // Check if entering goal area - adjusted for bigger goal
+          if (ball.x >= centerX + arenaRadius - 40 && 
               ball.y >= centerY - goalHeight/2 - ballRadius && 
               ball.y <= centerY + goalHeight/2 + ballRadius) {
             // Goal scored!
