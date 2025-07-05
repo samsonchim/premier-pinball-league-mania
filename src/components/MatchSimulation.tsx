@@ -61,11 +61,21 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
   }, [timeLeft, gameStarted, gameEnded, gamePaused, homeGoals, awayGoals, onMatchEnd]);
 
   const handleGoalScored = (team: 'home' | 'away') => {
+    console.log(`Goal scored by ${team}!`);
+    
     // Update score immediately
     if (team === 'home') {
-      setHomeGoals(prev => prev + 1);
+      setHomeGoals(prev => {
+        const newScore = prev + 1;
+        console.log(`Home goals updated to: ${newScore}`);
+        return newScore;
+      });
     } else {
-      setAwayGoals(prev => prev + 1);
+      setAwayGoals(prev => {
+        const newScore = prev + 1;
+        console.log(`Away goals updated to: ${newScore}`);
+        return newScore;
+      });
     }
     
     // Show goal notification and pause game
@@ -92,16 +102,16 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
     const ballRadius = 12;
-    const goalWidth = 120;
-    const goalHeight = 50;
-    const goalDepth = 30; // How deep the goal extends into the arena
+    const goalWidth = 80;
+    const goalHeight = 80;
+    const goalDepth = 40;
 
     function animate() {
       if (!ctx || !canvas) return;
 
       // Update rotation only if game is not paused
       if (!gamePaused) {
-        rotationRef.current += 0.005;
+        rotationRef.current += 0.008;
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -119,12 +129,12 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       ctx.arc(centerX, centerY, arenaRadius, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Draw goal - bigger size
+      // Draw goal - bigger and more visible
       ctx.fillStyle = '#00FF41';
-      ctx.fillRect(centerX + arenaRadius - 20, centerY - goalHeight/2, goalDepth, goalHeight);
+      ctx.fillRect(centerX + arenaRadius - 15, centerY - goalHeight/2, goalDepth, goalHeight);
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 3;
-      ctx.strokeRect(centerX + arenaRadius - 20, centerY - goalHeight/2, goalDepth, goalHeight);
+      ctx.strokeRect(centerX + arenaRadius - 15, centerY - goalHeight/2, goalDepth, goalHeight);
 
       // Restore context
       ctx.restore();
@@ -142,15 +152,23 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance >= arenaRadius - ballRadius) {
-            // More precise goal detection - ball must be fully inside goal area
-            const goalLeft = centerX + arenaRadius - 20;
-            const goalRight = centerX + arenaRadius + goalDepth - 20;
+            // Goal detection - more precise boundaries
+            const goalLeft = centerX + arenaRadius - 15;
+            const goalRight = centerX + arenaRadius + goalDepth - 15;
             const goalTop = centerY - goalHeight/2;
             const goalBottom = centerY + goalHeight/2;
             
-            // Check if ball center is completely within goal boundaries
-            if (ball.x >= goalLeft && ball.x <= goalRight && 
-                ball.y >= goalTop && ball.y <= goalBottom) {
+            console.log(`Ball ${index} at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)})`);
+            console.log(`Goal boundaries: left=${goalLeft}, right=${goalRight}, top=${goalTop}, bottom=${goalBottom}`);
+            
+            // Check if ball is completely within goal boundaries
+            if (ball.x >= goalLeft + ballRadius && 
+                ball.x <= goalRight - ballRadius && 
+                ball.y >= goalTop + ballRadius && 
+                ball.y <= goalBottom - ballRadius) {
+              
+              console.log(`GOAL! Ball ${index} (team: ${ball.team}) entered the goal!`);
+              
               // Goal scored! Handle immediately
               handleGoalScored(ball.team);
               
@@ -160,7 +178,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
               ball.vx = (Math.random() - 0.5) * 6;
               ball.vy = (Math.random() - 0.5) * 6;
             } else {
-              // Enhanced bouncing physics - more sensitive
+              // Enhanced bouncing physics
               const angle = Math.atan2(dy, dx);
               const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
               
@@ -176,8 +194,8 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
               ball.vy = ball.vy - 2 * dotProduct * normalY;
               
               // Add some randomness and maintain energy
-              ball.vx *= 0.95 + Math.random() * 0.1;
-              ball.vy *= 0.95 + Math.random() * 0.1;
+              ball.vx *= 0.9 + Math.random() * 0.2;
+              ball.vy *= 0.9 + Math.random() * 0.2;
               
               // Ensure minimum speed
               const newSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
