@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Match } from '../context/GameContext';
 import { Button } from '@/components/ui/button';
@@ -152,7 +153,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance >= arenaRadius - ballRadius) {
-            // Goal detection - more precise boundaries
+            // Goal detection - improved boundaries
             const goalLeft = centerX + arenaRadius - 15;
             const goalRight = centerX + arenaRadius + goalDepth - 15;
             const goalTop = centerY - goalHeight/2;
@@ -161,11 +162,11 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
             console.log(`Ball ${index} at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)})`);
             console.log(`Goal boundaries: left=${goalLeft}, right=${goalRight}, top=${goalTop}, bottom=${goalBottom}`);
             
-            // Check if ball is completely within goal boundaries
-            if (ball.x >= goalLeft + ballRadius && 
-                ball.x <= goalRight - ballRadius && 
-                ball.y >= goalTop + ballRadius && 
-                ball.y <= goalBottom - ballRadius) {
+            // More lenient goal detection - ball center must be within goal area
+            if (ball.x >= goalLeft && 
+                ball.x <= goalRight && 
+                ball.y >= goalTop && 
+                ball.y <= goalBottom) {
               
               console.log(`GOAL! Ball ${index} (team: ${ball.team}) entered the goal!`);
               
