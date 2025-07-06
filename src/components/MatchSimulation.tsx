@@ -23,7 +23,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const rotationRef = useRef<number>(0);
-  const [timeLeft, setTimeLeft] = useState(90);
+  const [timeElapsed, setTimeElapsed] = useState(0);
   const [homeGoals, setHomeGoals] = useState(0);
   const [awayGoals, setAwayGoals] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
@@ -54,14 +54,14 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
   ]);
 
   useEffect(() => {
-    if (gameStarted && timeLeft > 0 && !gameEnded && !gamePaused) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    if (gameStarted && timeElapsed < 90 && !gameEnded && !gamePaused) {
+      const timer = setTimeout(() => setTimeElapsed(timeElapsed + 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !gameEnded) {
+    } else if (timeElapsed >= 90 && !gameEnded) {
       setGameEnded(true);
       setTimeout(() => onMatchEnd(homeGoals, awayGoals), 2000);
     }
-  }, [timeLeft, gameStarted, gameEnded, gamePaused, homeGoals, awayGoals, onMatchEnd]);
+  }, [timeElapsed, gameStarted, gameEnded, gamePaused, homeGoals, awayGoals, onMatchEnd]);
 
   const handleGoalScored = (team: 'home' | 'away') => {
     console.log(`Goal scored by ${team}!`);
@@ -86,12 +86,12 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     setShowGoalNotification(true);
     setGamePaused(true);
     
-    // Hide notification and resume game after 2 seconds
+    // Hide notification and resume game after 1.5 seconds (reduced from 2 seconds)
     setTimeout(() => {
       setShowGoalNotification(false);
       setGoalScorer(null);
       setGamePaused(false);
-    }, 2000);
+    }, 1500);
   };
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
     const ballRadius = 12;
-    const goalOpeningAngle = Math.PI / 3; // 60 degrees opening for better visibility
+    const goalOpeningAngle = Math.PI / 8.5; 
 
     function animate() {
       if (!ctx || !canvas) return;
@@ -132,14 +132,14 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       ctx.stroke();
 
       // Draw goal posts at the opening
-      const goalPostLength = 30;
+      const goalPostLength = 8;
       const topPostX = centerX + Math.cos(-goalOpeningAngle / 2) * arenaRadius;
       const topPostY = centerY + Math.sin(-goalOpeningAngle / 2) * arenaRadius;
       const bottomPostX = centerX + Math.cos(goalOpeningAngle / 2) * arenaRadius;
       const bottomPostY = centerY + Math.sin(goalOpeningAngle / 2) * arenaRadius;
       
       ctx.strokeStyle = '#00FF41';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 8;
       ctx.beginPath();
       ctx.moveTo(topPostX, topPostY);
       ctx.lineTo(topPostX + goalPostLength, topPostY);
@@ -161,10 +161,32 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
           const dx = ball.x - centerX;
           const dy = ball.y - centerY;
           const distance = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx);
+          const ballAngle = Math.atan2(dy, dx);
 
-          // Check if ball is in the goal opening area
-          const isInGoalOpening = dx > 0 && Math.abs(angle) <= goalOpeningAngle / 2;
+          // Calculate the current goal opening position (accounting for rotation)
+          const currentGoalAngle = rotationRef.current; // Goal opening rotates with arena
+          const goalAngleMin = currentGoalAngle - goalOpeningAngle / 2;
+          const goalAngleMax = currentGoalAngle + goalOpeningAngle / 2;
+          
+          // Normalize angles to -π to π range
+          const normalizeAngle = (angle: number) => {
+            while (angle > Math.PI) angle -= 2 * Math.PI;
+            while (angle < -Math.PI) angle += 2 * Math.PI;
+            return angle;
+          };
+          
+          const normalizedBallAngle = normalizeAngle(ballAngle);
+          const normalizedGoalMin = normalizeAngle(goalAngleMin);
+          const normalizedGoalMax = normalizeAngle(goalAngleMax);
+          
+          // Check if ball is in the goal opening area (handle angle wrap-around)
+          let isInGoalOpening = false;
+          if (normalizedGoalMin <= normalizedGoalMax) {
+            isInGoalOpening = normalizedBallAngle >= normalizedGoalMin && normalizedBallAngle <= normalizedGoalMax;
+          } else {
+            // Handle wrap-around case
+            isInGoalOpening = normalizedBallAngle >= normalizedGoalMin || normalizedBallAngle <= normalizedGoalMax;
+          }
 
           if (distance >= arenaRadius - ballRadius) {
             if (isInGoalOpening) {
@@ -172,10 +194,9 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
               ball.isExiting = true;
               console.log(`Ball ${index} (team: ${ball.team}) is exiting through goal opening`);
               
-              // Allow ball to continue moving out
-              // Check if ball has fully exited (distance beyond arena + some margin)
-              if (distance > arenaRadius + ballRadius + 20) {
-                console.log(`GOAL! Ball ${index} (team: ${ball.team}) has fully exited through goal`);
+              // Score immediately when ball crosses the goal line (reduced delay)
+              if (distance > arenaRadius + ballRadius / 2) {
+                console.log(`GOAL! Ball ${index} (team: ${ball.team}) has scored!`);
                 
                 // Score a goal
                 handleGoalScored(ball.team);
@@ -192,7 +213,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
               ball.isExiting = false;
               
               // Calculate collision normal
-              const collisionAngle = angle;
+              const collisionAngle = ballAngle;
               
               // Reflect velocity based on collision angle
               const normalX = Math.cos(collisionAngle);
@@ -322,9 +343,9 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
             </Button>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-800">
-                {timeLeft}s
+                {timeElapsed}s
               </div>
-              <div className="text-sm text-gray-600">Time Remaining</div>
+              <div className="text-sm text-gray-600">Time Elapsed</div>
             </div>
             <div className="w-24"></div>
           </div>
