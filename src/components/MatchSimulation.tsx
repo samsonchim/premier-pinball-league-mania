@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Match } from '../context/GameContext';
 import { Button } from '@/components/ui/button';
@@ -84,52 +85,83 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     setShowGoalNotification(true);
     setGamePaused(true);
     
-    // Hide notification and resume game after 1 second
+    // Hide notification and resume game after 2 seconds
     setTimeout(() => {
       setShowGoalNotification(false);
       setGoalScorer(null);
       setGamePaused(false);
-    }, 1000);
+    }, 2000);
   };
 
   const checkGoalDetection = (canvas: HTMLCanvasElement) => {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
-    const goalWidth = 80;
-    const goalHeight = 80;
-    const goalDepth = 40;
-
-    const goalLeft = centerX + arenaRadius - 15;
-    const goalRight = centerX + arenaRadius + goalDepth - 15;
-    const goalTop = centerY - goalHeight/2;
-    const goalBottom = centerY + goalHeight/2;
-
+    const goalOpeningAngle = Math.PI / 6; // 30 degrees opening
+    
     balls.current.forEach((ball, index) => {
-      // Check if ball is in goal area
-      if (ball.x >= goalLeft && 
-          ball.x <= goalRight && 
-          ball.y >= goalTop && 
-          ball.y <= goalBottom) {
+      const dx = ball.x - centerX;
+      const dy = ball.y - centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Check if ball is outside the arena
+      if (distance > arenaRadius + 10) {
+        // Calculate angle of ball position
+        const angle = Math.atan2(dy, dx);
         
-        console.log(`GOAL DETECTED! Ball ${index} (team: ${ball.team}) at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)})`);
-        console.log(`Goal area: left=${goalLeft}, right=${goalRight}, top=${goalTop}, bottom=${goalBottom}`);
+        // Normalize angle to be between 0 and 2π
+        const normalizedAngle = angle < 0 ? angle + 2 * Math.PI : angle;
         
-        // Pause for goal detection
-        setGoalDetectionPause(true);
+        // Check if ball exited through the goal opening (right side, centered)
+        const goalStartAngle = -goalOpeningAngle / 2;
+        const goalEndAngle = goalOpeningAngle / 2;
         
-        // Process goal after brief pause
-        setTimeout(() => {
-          handleGoalScored(ball.team);
+        // Convert to normalized angles
+        const normalizedGoalStart = goalStartAngle < 0 ? goalStartAngle + 2 * Math.PI : goalStartAngle;
+        const normalizedGoalEnd = goalEndAngle;
+        
+        let isInGoalOpening = false;
+        if (normalizedGoalStart > normalizedGoalEnd) {
+          // Goal opening crosses 0 degrees
+          isInGoalOpening = normalizedAngle >= normalizedGoalStart || normalizedAngle <= normalizedGoalEnd;
+        } else {
+          isInGoalOpening = normalizedAngle >= normalizedGoalStart && normalizedAngle <= normalizedGoalEnd;
+        }
+        
+        // Also check if ball is on the right side (positive x direction from center)
+        if (dx > 0 && Math.abs(normalizedAngle) <= goalOpeningAngle / 2) {
+          isInGoalOpening = true;
+        }
+        
+        if (isInGoalOpening) {
+          console.log(`GOAL! Ball ${index} (team: ${ball.team}) exited through goal opening`);
+          console.log(`Ball position: (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)}), angle: ${(normalizedAngle * 180 / Math.PI).toFixed(1)}°`);
           
-          // Reset ball position to center area
-          ball.x = centerX + (Math.random() - 0.5) * 80;
-          ball.y = centerY + (Math.random() - 0.5) * 80;
-          ball.vx = (Math.random() - 0.5) * 6;
-          ball.vy = (Math.random() - 0.5) * 6;
+          // Pause for goal detection
+          setGoalDetectionPause(true);
           
-          setGoalDetectionPause(false);
-        }, 100); // Brief pause for accurate detection
+          // Process goal after brief pause
+          setTimeout(() => {
+            handleGoalScored(ball.team);
+            
+            // Reset ball position to center area
+            ball.x = centerX + (Math.random() - 0.5) * 60;
+            ball.y = centerY + (Math.random() - 0.5) * 60;
+            ball.vx = (Math.random() - 0.5) * 4;
+            ball.vy = (Math.random() - 0.5) * 4;
+            
+            setGoalDetectionPause(false);
+          }, 100);
+        } else {
+          // Ball exited through the wall, bounce it back
+          const angle = Math.atan2(dy, dx);
+          ball.x = centerX + Math.cos(angle) * (arenaRadius - 15);
+          ball.y = centerY + Math.sin(angle) * (arenaRadius - 15);
+          
+          // Reverse velocity
+          ball.vx *= -0.8;
+          ball.vy *= -0.8;
+        }
       }
     });
   };
@@ -145,9 +177,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
     const ballRadius = 12;
-    const goalWidth = 80;
-    const goalHeight = 80;
-    const goalDepth = 40;
+    const goalOpeningAngle = Math.PI / 6; // 30 degrees
 
     function animate() {
       if (!ctx || !canvas) return;
@@ -165,19 +195,29 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       ctx.rotate(rotationRef.current);
       ctx.translate(-centerX, -centerY);
 
-      // Draw arena circle
+      // Draw arena circle with opening
       ctx.strokeStyle = '#37003C';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, arenaRadius, 0, Math.PI * 2);
+      // Draw arc with opening on the right side
+      ctx.arc(centerX, centerY, arenaRadius, goalOpeningAngle / 2, 2 * Math.PI - goalOpeningAngle / 2);
       ctx.stroke();
 
-      // Draw goal - bigger and more visible
-      ctx.fillStyle = '#00FF41';
-      ctx.fillRect(centerX + arenaRadius - 15, centerY - goalHeight/2, goalDepth, goalHeight);
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(centerX + arenaRadius - 15, centerY - goalHeight/2, goalDepth, goalHeight);
+      // Draw goal posts at the opening
+      const goalPostLength = 20;
+      const topPostX = centerX + Math.cos(-goalOpeningAngle / 2) * arenaRadius;
+      const topPostY = centerY + Math.sin(-goalOpeningAngle / 2) * arenaRadius;
+      const bottomPostX = centerX + Math.cos(goalOpeningAngle / 2) * arenaRadius;
+      const bottomPostY = centerY + Math.sin(goalOpeningAngle / 2) * arenaRadius;
+      
+      ctx.strokeStyle = '#00FF41';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(topPostX, topPostY);
+      ctx.lineTo(topPostX + goalPostLength, topPostY);
+      ctx.moveTo(bottomPostX, bottomPostY);
+      ctx.lineTo(bottomPostX + goalPostLength, bottomPostY);
+      ctx.stroke();
 
       // Restore context
       ctx.restore();
@@ -194,41 +234,50 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
           ball.x += ball.vx;
           ball.y += ball.vy;
 
-          // Check collision with arena boundary
+          // Check collision with arena boundary (but allow exit through goal opening)
           const dx = ball.x - centerX;
           const dy = ball.y - centerY;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance >= arenaRadius - ballRadius) {
-            // Enhanced bouncing physics (no goal detection here anymore)
+            // Check if ball is trying to exit through goal opening
             const angle = Math.atan2(dy, dx);
-            const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+            const normalizedAngle = angle < 0 ? angle + 2 * Math.PI : angle;
             
-            // Reflect velocity based on collision angle
-            const normalX = Math.cos(angle);
-            const normalY = Math.sin(angle);
+            // Allow exit through goal opening (right side)
+            const isInGoalOpening = dx > 0 && Math.abs(angle) <= goalOpeningAngle / 2;
             
-            // Dot product of velocity and normal
-            const dotProduct = ball.vx * normalX + ball.vy * normalY;
-            
-            // Reflect velocity
-            ball.vx = ball.vx - 2 * dotProduct * normalX;
-            ball.vy = ball.vy - 2 * dotProduct * normalY;
-            
-            // Add some randomness and maintain energy
-            ball.vx *= 0.9 + Math.random() * 0.2;
-            ball.vy *= 0.9 + Math.random() * 0.2;
-            
-            // Ensure minimum speed
-            const newSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-            if (newSpeed < 2) {
-              ball.vx = (ball.vx / newSpeed) * 2.5;
-              ball.vy = (ball.vy / newSpeed) * 2.5;
+            if (!isInGoalOpening) {
+              // Normal wall collision - bounce back
+              const collisionAngle = Math.atan2(dy, dx);
+              const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+              
+              // Reflect velocity based on collision angle
+              const normalX = Math.cos(collisionAngle);
+              const normalY = Math.sin(collisionAngle);
+              
+              // Dot product of velocity and normal
+              const dotProduct = ball.vx * normalX + ball.vy * normalY;
+              
+              // Reflect velocity
+              ball.vx = ball.vx - 2 * dotProduct * normalX;
+              ball.vy = ball.vy - 2 * dotProduct * normalY;
+              
+              // Add some randomness and maintain energy
+              ball.vx *= 0.9 + Math.random() * 0.2;
+              ball.vy *= 0.9 + Math.random() * 0.2;
+              
+              // Ensure minimum speed
+              const newSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+              if (newSpeed < 2) {
+                ball.vx = (ball.vx / newSpeed) * 2.5;
+                ball.vy = (ball.vy / newSpeed) * 2.5;
+              }
+              
+              // Push ball back inside arena
+              ball.x = centerX + Math.cos(collisionAngle) * (arenaRadius - ballRadius - 2);
+              ball.y = centerY + Math.sin(collisionAngle) * (arenaRadius - ballRadius - 2);
             }
-            
-            // Push ball back inside arena
-            ball.x = centerX + Math.cos(angle) * (arenaRadius - ballRadius - 2);
-            ball.y = centerY + Math.sin(angle) * (arenaRadius - ballRadius - 2);
           }
 
           // Ball-to-ball collision detection
