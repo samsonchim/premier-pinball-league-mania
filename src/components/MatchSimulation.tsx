@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Match } from '../context/GameContext';
 import { Button } from '@/components/ui/button';
@@ -31,6 +30,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
   const [showGoalNotification, setShowGoalNotification] = useState(false);
   const [goalScorer, setGoalScorer] = useState<'home' | 'away' | null>(null);
   const [gamePaused, setGamePaused] = useState(false);
+  const [goalDetectionPause, setGoalDetectionPause] = useState(false);
 
   const balls = useRef<Ball[]>([
     { 
@@ -92,6 +92,48 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     }, 1000);
   };
 
+  const checkGoalDetection = (canvas: HTMLCanvasElement) => {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const arenaRadius = 180;
+    const goalWidth = 80;
+    const goalHeight = 80;
+    const goalDepth = 40;
+
+    const goalLeft = centerX + arenaRadius - 15;
+    const goalRight = centerX + arenaRadius + goalDepth - 15;
+    const goalTop = centerY - goalHeight/2;
+    const goalBottom = centerY + goalHeight/2;
+
+    balls.current.forEach((ball, index) => {
+      // Check if ball is in goal area
+      if (ball.x >= goalLeft && 
+          ball.x <= goalRight && 
+          ball.y >= goalTop && 
+          ball.y <= goalBottom) {
+        
+        console.log(`GOAL DETECTED! Ball ${index} (team: ${ball.team}) at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)})`);
+        console.log(`Goal area: left=${goalLeft}, right=${goalRight}, top=${goalTop}, bottom=${goalBottom}`);
+        
+        // Pause for goal detection
+        setGoalDetectionPause(true);
+        
+        // Process goal after brief pause
+        setTimeout(() => {
+          handleGoalScored(ball.team);
+          
+          // Reset ball position to center area
+          ball.x = centerX + (Math.random() - 0.5) * 80;
+          ball.y = centerY + (Math.random() - 0.5) * 80;
+          ball.vx = (Math.random() - 0.5) * 6;
+          ball.vy = (Math.random() - 0.5) * 6;
+          
+          setGoalDetectionPause(false);
+        }, 100); // Brief pause for accurate detection
+      }
+    });
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !gameStarted) return;
@@ -111,7 +153,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       if (!ctx || !canvas) return;
 
       // Update rotation only if game is not paused
-      if (!gamePaused) {
+      if (!gamePaused && !goalDetectionPause) {
         rotationRef.current += 0.008;
       }
 
@@ -140,8 +182,13 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       // Restore context
       ctx.restore();
 
+      // Check for goals first (before movement)
+      if (!gamePaused && !goalDetectionPause) {
+        checkGoalDetection(canvas);
+      }
+
       // Update and draw balls only if game is not paused
-      if (!gamePaused) {
+      if (!gamePaused && !goalDetectionPause) {
         balls.current.forEach((ball, index) => {
           // Update position
           ball.x += ball.vx;
@@ -153,62 +200,35 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
           const distance = Math.sqrt(dx * dx + dy * dy);
 
           if (distance >= arenaRadius - ballRadius) {
-            // Goal detection - improved boundaries
-            const goalLeft = centerX + arenaRadius - 15;
-            const goalRight = centerX + arenaRadius + goalDepth - 15;
-            const goalTop = centerY - goalHeight/2;
-            const goalBottom = centerY + goalHeight/2;
+            // Enhanced bouncing physics (no goal detection here anymore)
+            const angle = Math.atan2(dy, dx);
+            const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
             
-            console.log(`Ball ${index} at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)})`);
-            console.log(`Goal boundaries: left=${goalLeft}, right=${goalRight}, top=${goalTop}, bottom=${goalBottom}`);
+            // Reflect velocity based on collision angle
+            const normalX = Math.cos(angle);
+            const normalY = Math.sin(angle);
             
-            // More lenient goal detection - ball center must be within goal area
-            if (ball.x >= goalLeft && 
-                ball.x <= goalRight && 
-                ball.y >= goalTop && 
-                ball.y <= goalBottom) {
-              
-              console.log(`GOAL! Ball ${index} (team: ${ball.team}) entered the goal!`);
-              
-              // Goal scored! Handle immediately
-              handleGoalScored(ball.team);
-              
-              // Reset ball position to center area
-              ball.x = centerX + (Math.random() - 0.5) * 80;
-              ball.y = centerY + (Math.random() - 0.5) * 80;
-              ball.vx = (Math.random() - 0.5) * 6;
-              ball.vy = (Math.random() - 0.5) * 6;
-            } else {
-              // Enhanced bouncing physics
-              const angle = Math.atan2(dy, dx);
-              const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-              
-              // Reflect velocity based on collision angle
-              const normalX = Math.cos(angle);
-              const normalY = Math.sin(angle);
-              
-              // Dot product of velocity and normal
-              const dotProduct = ball.vx * normalX + ball.vy * normalY;
-              
-              // Reflect velocity
-              ball.vx = ball.vx - 2 * dotProduct * normalX;
-              ball.vy = ball.vy - 2 * dotProduct * normalY;
-              
-              // Add some randomness and maintain energy
-              ball.vx *= 0.9 + Math.random() * 0.2;
-              ball.vy *= 0.9 + Math.random() * 0.2;
-              
-              // Ensure minimum speed
-              const newSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-              if (newSpeed < 2) {
-                ball.vx = (ball.vx / newSpeed) * 2.5;
-                ball.vy = (ball.vy / newSpeed) * 2.5;
-              }
-              
-              // Push ball back inside arena
-              ball.x = centerX + Math.cos(angle) * (arenaRadius - ballRadius - 2);
-              ball.y = centerY + Math.sin(angle) * (arenaRadius - ballRadius - 2);
+            // Dot product of velocity and normal
+            const dotProduct = ball.vx * normalX + ball.vy * normalY;
+            
+            // Reflect velocity
+            ball.vx = ball.vx - 2 * dotProduct * normalX;
+            ball.vy = ball.vy - 2 * dotProduct * normalY;
+            
+            // Add some randomness and maintain energy
+            ball.vx *= 0.9 + Math.random() * 0.2;
+            ball.vy *= 0.9 + Math.random() * 0.2;
+            
+            // Ensure minimum speed
+            const newSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+            if (newSpeed < 2) {
+              ball.vx = (ball.vx / newSpeed) * 2.5;
+              ball.vy = (ball.vy / newSpeed) * 2.5;
             }
+            
+            // Push ball back inside arena
+            ball.x = centerX + Math.cos(angle) * (arenaRadius - ballRadius - 2);
+            ball.y = centerY + Math.sin(angle) * (arenaRadius - ballRadius - 2);
           }
 
           // Ball-to-ball collision detection
@@ -291,7 +311,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [gameStarted, gameEnded, gamePaused, showGoalNotification, goalScorer, match]);
+  }, [gameStarted, gameEnded, gamePaused, goalDetectionPause, showGoalNotification, goalScorer, match]);
 
   const startGame = () => {
     setGameStarted(true);
