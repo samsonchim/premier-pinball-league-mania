@@ -16,6 +16,7 @@ interface Ball {
   vy: number;
   team: 'home' | 'away';
   color: string;
+  isExiting: boolean;
 }
 
 export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationProps) {
@@ -38,7 +39,8 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       vx: 3, 
       vy: 2, 
       team: 'home',
-      color: match.homeTeam.primaryColor
+      color: match.homeTeam.primaryColor,
+      isExiting: false
     },
     { 
       x: 400, 
@@ -46,7 +48,8 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       vx: -2.5, 
       vy: -3, 
       team: 'away',
-      color: match.awayTeam.primaryColor
+      color: match.awayTeam.primaryColor,
+      isExiting: false
     }
   ]);
 
@@ -102,7 +105,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
     const ballRadius = 12;
-    const goalOpeningAngle = Math.PI / 4; // 45 degrees opening
+    const goalOpeningAngle = Math.PI / 3; // 60 degrees opening for better visibility
 
     function animate() {
       if (!ctx || !canvas) return;
@@ -129,7 +132,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       ctx.stroke();
 
       // Draw goal posts at the opening
-      const goalPostLength = 25;
+      const goalPostLength = 30;
       const topPostX = centerX + Math.cos(-goalOpeningAngle / 2) * arenaRadius;
       const topPostY = centerY + Math.sin(-goalOpeningAngle / 2) * arenaRadius;
       const bottomPostX = centerX + Math.cos(goalOpeningAngle / 2) * arenaRadius;
@@ -154,48 +157,41 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
           ball.x += ball.vx;
           ball.y += ball.vy;
 
-          // Check if ball has exited the arena
+          // Check ball position relative to arena
           const dx = ball.x - centerX;
           const dy = ball.y - centerY;
           const distance = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx);
 
-          if (distance > arenaRadius + ballRadius + 10) {
-            // Ball has completely exited the arena
-            const angle = Math.atan2(dy, dx);
-            
-            // Check if ball exited through the goal opening (right side)
-            const isInGoalOpening = dx > 0 && Math.abs(angle) <= goalOpeningAngle / 2;
-            
+          // Check if ball is in the goal opening area
+          const isInGoalOpening = dx > 0 && Math.abs(angle) <= goalOpeningAngle / 2;
+
+          if (distance >= arenaRadius - ballRadius) {
             if (isInGoalOpening) {
-              console.log(`GOAL! Ball ${index} (team: ${ball.team}) exited through goal opening`);
+              // Ball is exiting through the goal opening
+              ball.isExiting = true;
+              console.log(`Ball ${index} (team: ${ball.team}) is exiting through goal opening`);
               
-              // Score a goal
-              handleGoalScored(ball.team);
-              
-              // Reset ball position to center area
-              ball.x = centerX + (Math.random() - 0.5) * 60;
-              ball.y = centerY + (Math.random() - 0.5) * 60;
-              ball.vx = (Math.random() - 0.5) * 4;
-              ball.vy = (Math.random() - 0.5) * 4;
+              // Allow ball to continue moving out
+              // Check if ball has fully exited (distance beyond arena + some margin)
+              if (distance > arenaRadius + ballRadius + 20) {
+                console.log(`GOAL! Ball ${index} (team: ${ball.team}) has fully exited through goal`);
+                
+                // Score a goal
+                handleGoalScored(ball.team);
+                
+                // Reset ball position to center area
+                ball.x = centerX + (Math.random() - 0.5) * 60;
+                ball.y = centerY + (Math.random() - 0.5) * 60;
+                ball.vx = (Math.random() - 0.5) * 4;
+                ball.vy = (Math.random() - 0.5) * 4;
+                ball.isExiting = false;
+              }
             } else {
-              // Ball exited through the wall, reset position and bounce back
-              const resetAngle = Math.atan2(dy, dx);
-              ball.x = centerX + Math.cos(resetAngle) * (arenaRadius - ballRadius - 5);
-              ball.y = centerY + Math.sin(resetAngle) * (arenaRadius - ballRadius - 5);
+              // Ball hits the wall - bounce back
+              ball.isExiting = false;
               
-              // Reverse velocity with some damping
-              ball.vx *= -0.8;
-              ball.vy *= -0.8;
-            }
-          } else if (distance >= arenaRadius - ballRadius) {
-            // Ball is at the arena boundary
-            const angle = Math.atan2(dy, dx);
-            
-            // Check if ball is in the goal opening area - allow it to pass through
-            const isInGoalOpening = dx > 0 && Math.abs(angle) <= goalOpeningAngle / 2;
-            
-            if (!isInGoalOpening) {
-              // Normal wall collision - bounce back
+              // Calculate collision normal
               const collisionAngle = angle;
               
               // Reflect velocity based on collision angle
@@ -224,12 +220,14 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
               ball.x = centerX + Math.cos(collisionAngle) * (arenaRadius - ballRadius - 2);
               ball.y = centerY + Math.sin(collisionAngle) * (arenaRadius - ballRadius - 2);
             }
-            // If in goal opening, let the ball continue through without collision
+          } else {
+            // Ball is inside the arena
+            ball.isExiting = false;
           }
 
-          // Ball-to-ball collision detection
+          // Ball-to-ball collision detection (only if neither ball is exiting)
           balls.current.forEach((otherBall, otherIndex) => {
-            if (index !== otherIndex) {
+            if (index !== otherIndex && !ball.isExiting && !otherBall.isExiting) {
               const dx = ball.x - otherBall.x;
               const dy = ball.y - otherBall.y;
               const distance = Math.sqrt(dx * dx + dy * dy);
@@ -263,8 +261,8 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
         ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
         ctx.fillStyle = ball.color;
         ctx.fill();
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ball.isExiting ? '#FFD700' : '#FFFFFF'; // Gold border when exiting
+        ctx.lineWidth = ball.isExiting ? 3 : 2; // Thicker border when exiting
         ctx.stroke();
         
         // Add team initial in center of ball
