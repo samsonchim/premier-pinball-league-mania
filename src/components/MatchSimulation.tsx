@@ -105,7 +105,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
     const ballRadius = 12;
-    const goalOpeningAngle = Math.PI / 8.5; 
+    const goalOpeningAngle = Math.PI / 9.5; 
 
     function animate() {
       if (!ctx || !canvas) return;
