@@ -104,15 +104,15 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const arenaRadius = 180;
-    const ballRadius = 18;
-    const goalOpeningAngle = Math.PI / 12; 
+    const ballRadius = 14;
+    const goalOpeningAngle = Math.PI / 10.5; 
 
     function animate() {
       if (!ctx || !canvas) return;
 
       // Update rotation only if game is not paused
       if (!gamePaused) {
-        rotationRef.current += 0.015;
+        rotationRef.current += 0.008;
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -132,7 +132,7 @@ export function MatchSimulation({ match, onMatchEnd, onBack }: MatchSimulationPr
       ctx.stroke();
 
       // Draw goal posts at the opening
-      const goalPostLength = 4;
+      const goalPostLength = 8;
       const topPostX = centerX + Math.cos(-goalOpeningAngle / 2) * arenaRadius;
       const topPostY = centerY + Math.sin(-goalOpeningAngle / 2) * arenaRadius;
       const bottomPostX = centerX + Math.cos(goalOpeningAngle / 2) * arenaRadius;
